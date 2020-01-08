@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [[ $EUID -ne 0 ]]; then
+	echo "Must Be run as ROOT"
+	exit 1
+fi
+#Default values
+maxInterfaces=25
+clean=0
+isANumber='^[0-9]+$'
+
+#Test all given argument(s)
+for var in "$@"
+do
+       	if [[ "$var" =~ $isANumber ]]; then
+                 maxInterfaces=$var
+        fi
+	if [[ "$var" == "clean" ]]; then
+		clean=1
+        fi
+done
+
+
+
+#Cleans the interfaces.
+#Not neccessary  when testing a new module version as the MAJOR number stays the same and 
+#the interfaces are linked to it and module reinsertion is enough to change their behaviour
+if [[ `ls /dev/ | grep lettre | wc -l` -ne 0 ]]; then
+	rm /dev/lettre*
+	echo "Cleanning existing lettre interface"
+fi
+#Removes the previously insterted module
+if [[ `lsmod | head | grep mod5 | wc -l` -ne 0 ]]; then
+	rmmod mod5
+	echo "Removing module"
+fi
+if [[ $clean -ne 1 ]]; then
+	#Inserts newly compiled module
+	if [[ `ls -l | grep mod5 | wc -l` -ne 0 ]]; then
+		insmod mod5.ko
+		echo "Module inserted"
+	fi
+	for i in `seq 0 $maxInterfaces`; do
+		mknod /dev/lettre$i c 244 $i
+	done
+	echo $maxInterfaces+1 "created interfaces"
+fi
