@@ -13,6 +13,8 @@
 #include <linux/spinlock.h>
 #include <linux/ftrace.h>
 #include <linux/sched.h>
+#include <linux/delay.h>
+#include <linux/unistd.h>
 
 MODULE_AUTHOR("ESME_3S3");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -41,7 +43,7 @@ int arrayLeftShift(int characterRead){
 
 ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos){
 
-        int minor,i=0;
+        int minor,i=0, copied = 0, cpt = 0;
         minor = iminor(fp->f_path.dentry->d_inode);
 	printk(KERN_DEBUG " TEST1 ");
         //TODO
@@ -54,30 +56,41 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 		up(&Sem);
 //		for(i = 0; i<fifoSize; i++){ printk("%c",uBuffer[i]);}
         }
-/*	else{
+	else{
 		i = nbc;
 		printk(KERN_DEBUG " TEST3 ");
-		while (i > 0){
-			printk(KERN_DEBUG " TEST6 ");
+		while (i > 0 && cpt < 50){
+//			printk(KERN_DEBUG " TEST6 ");
 			if (i >= occupiedFifoSpace && occupiedFifoSpace != 0){
 				down_interruptible(&Sem);
 				printk(KERN_DEBUG " TEST7 ");
-	                	if (copy_to_user((void * __user)uBuffer, (void *)fifoArray,occupiedFifoSpace)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
+	                	if (copy_to_user((void * __user)uBuffer+copied, (void *)fifoArray,occupiedFifoSpace)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
 	               		i-=occupiedFifoSpace;
+				copied+=occupiedFifoSpace;
 				arrayLeftShift(occupiedFifoSpace);
 				up(&Sem);
 			}
 			else if (i < occupiedFifoSpace){
 				down_interruptible(&Sem);
 		                printk(KERN_DEBUG " TEST5 ");
-				if (copy_to_user((void * __user)uBuffer, (void *)fifoArray,i)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
-                                arrayLeftShift(i);
-				break;
+				if (copy_to_user((void * __user)uBuffer+copied, (void *)fifoArray,i)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
+                                copied+=occupiedFifoSpace;
+				arrayLeftShift(i);
+				//break;
+				i = 0;
 				up(&Sem);
 			}
-			break;
+			//break;
+			cpt++;
+			printk(KERN_DEBUG"CPT %d",cpt);
+			mdelay(1000);
+/*delay(100000);
+delay(100000);
+delay(100000);
+delay(100000);
+*/
 		}
-	}*/
+	}
 	return i;
 
 }

@@ -52,7 +52,7 @@ void receive(char *P[]){
 	printf("Number of characters to read : ");
 	scanf("%d", &nbc);
 	int f1;
-	if ((f1 = open(P[1],O_RDONLY)) < 0) {
+	if ((f1 = open(P[1],O_RDONLY|O_NONBLOCK)) < 0) {
                 perror("open 1");
 		exit(2);
         }
@@ -80,7 +80,7 @@ void send(char *P[]){
 	length = strlen(buffer);
 	printf("\nLength of string %d\n", length);
 	int f1;
-        if ((f1 = open(P[1],O_WRONLY)) < 0) {
+        if ((f1 = open(P[1],O_WRONLY|O_NONBLOCK)) < 0) {
                 perror("open 1");
 		exit(2);
         }
