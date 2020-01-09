@@ -7,15 +7,17 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 
-void send(char *P[]);
-void receive(char *P[]);
+void send_B(char *P[]);
+void send_NB(char *P[]);
+void receive_B(char *P[]);
+void receive_NB(char *P[]);
 
 int main(int N, char *P[])
 {
 
 	int f1, f2, i;
 	char flag = 0;
-	char c[22],*p,options;
+	char c[22],*p, options;
 	char r[10] = "Hello_dear";
 	memset(c, 0, sizeof(c));
         if (N != 2 ) {
@@ -23,33 +25,60 @@ int main(int N, char *P[])
                 exit(1);
         }
 
-	printf("\tOptions\n1 : Read information\n2 : Write information\n3 : Exit\n");
-
 	while (flag == 0){
-		printf("Choose an option : ");
-		scanf("%d",&options);
-		switch(options){
-			case 1:
-			receive(P);
-			break;
-			case 2:
-			send(P);
-			break;
-			case 3:
-			flag = 1;
-			break;
-		}
-	}
+		printf("\n");
+		printf("+------------------------------------+\n");
+		printf("|              Options               |\n");
+		printf("+------------------------------------+\n");
+		printf("| 1 : Read information  (NonBlock)   |\n");
+		printf("| 2 : Write information (NonBlock)   |\n");
+		printf("| 3 : Read information  (Block)      |\n");
+		printf("| 4 : Write information (Block)      |\n");
+		printf("| 0 : Exit                           |\n");
+		printf("+------------------------------------+\n");
 
+		step_1:
+			printf("Choose an option : ");
+			goto step_2;
+
+		step_2:
+		scanf("%c",&options);
+//		options = getchar();
+		printf("DEBUG OPTIONS = %c\n", options);
+		switch(options){
+			case '1':
+				receive_NB(P);
+				break;
+			case '2':
+				send_NB(P);
+				break;
+			case '3':
+				receive_B(P);
+				break;
+			case '4':
+				send_B(P);
+				break;
+			case '0':
+				flag = 1;
+				break;
+			default :
+				goto step_1;
+				break;
+		}//END SWITCH
+	}//END WHILE
 	return 0;
 }
 
 
-void receive(char *P[]){
+void receive_NB(char *P[]){
 
 	char buffer[22],nbc;
 	memset(buffer, 0 , sizeof(buffer));
-	printf("Number of characters to read : ");
+	printf("\n\n");
+	printf("******************************\n");
+	printf("*****  READ (NON_BLOCK)  *****\n");
+	printf("******************************\n");
+	printf("Enter the number of characters you want to read : ");
 	scanf("%d", &nbc);
 	int f1;
 	if ((f1 = open(P[1],O_RDONLY|O_NONBLOCK)) < 0) {
@@ -61,24 +90,29 @@ void receive(char *P[]){
                 perror("read");
 		exit(5);
         }
-        printf("Les car lu sont '%s'\n", buffer);
+        printf("FIFO say : \"%s\"\n\n", buffer);
+	printf("\n********** ********** ********** ********** **********\n\n");
         close(f1);
 
 }
 
-void send(char *P[]){
+void send_NB(char *P[]){
 
         char buffer[22];
 	int length;
         memset(buffer, 0 , sizeof(buffer));
-	printf("Type to send : ");
+	printf("\n");
+	printf("*******************************\n");
+	printf("*****  WRITE (NON_BLOCK)  *****\n");
+	printf("*******************************\n");
+	printf("Enter the message you want to send : ");
 	//scanf("%s", buffer);
 	/*Clearing the newline from the previous scanf*/
 	while ((getchar()) != '\n');
 	fgets(buffer, 22, stdin);
 	strtok(buffer,"\n");
 	length = strlen(buffer);
-	printf("\nLength of string %d\n", length);
+	printf("Length of string = %d\n\n", length);
 	int f1;
         if ((f1 = open(P[1],O_WRONLY|O_NONBLOCK)) < 0) {
                 perror("open 1");
@@ -88,6 +122,65 @@ void send(char *P[]){
                 perror("write");
 		exit(6);
         }
+	printf("\n********** ********** ********** ********** **********\n\n");
+        close(f1);
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+void receive_B(char *P[]){
+
+	char buffer[22],nbc;
+	memset(buffer, 0 , sizeof(buffer));
+	printf("\n\n");
+	printf("**************************\n");
+	printf("*****  READ (BLOCK)  *****\n");
+	printf("**************************\n");
+	printf("Enter the number of characters you want to read : ");
+	scanf("%d", &nbc);
+	int f1;
+	if ((f1 = open(P[1],O_RDONLY)) < 0) {
+                perror("open 1");
+		exit(2);
+        }
+
+        if (read(f1,buffer,nbc) < 0 ) {
+                perror("read");
+		exit(5);
+        }
+        printf("FIFO say : \"%s\"\n\n", buffer);
+	printf("\n********** ********** ********** ********** **********\n\n");
+        close(f1);
+
+}
+
+void send_B(char *P[]){
+
+        char buffer[22];
+	int length;
+        memset(buffer, 0 , sizeof(buffer));
+	printf("\n");
+	printf("***************************\n");
+	printf("*****  WRITE (BLOCK)  *****\n");
+	printf("***************************\n");
+	printf("Enter the message you want to send : ");
+	//scanf("%s", buffer);
+	/*Clearing the newline from the previous scanf*/
+	while ((getchar()) != '\n');
+	fgets(buffer, 22, stdin);
+	strtok(buffer,"\n");
+	length = strlen(buffer);
+	printf("Length of string = %d\n\n", length);
+	int f1;
+        if ((f1 = open(P[1],O_WRONLY)) < 0) {
+                perror("open 1");
+		exit(2);
+        }
+        if (write(f1,buffer,length) != length) {
+                perror("write");
+		exit(6);
+        }
+	printf("\n********** ********** ********** ********** **********\n\n");
         close(f1);
 
 }
