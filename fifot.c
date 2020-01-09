@@ -10,12 +10,11 @@
 #include <linux/string.h>
 #include <linux/semaphore.h> 
 #include <linux/kernel.h>
-#include <linux/spinlock.h>
 #include <linux/ftrace.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/unistd.h>
-
+#include <linux/wait.h>
 MODULE_AUTHOR("ESME_3S3");
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -25,108 +24,116 @@ MODULE_LICENSE("Dual BSD/GPL");
 static int fifo_major = 0; // MAJOR Number
 static char fifoArray[fifoSize];
 static int occupiedFifoSpace = 0;
-struct semaphore Sem;
+struct semaphore orMutex;
+struct semaphore rMutex;
+struct semaphore wMutex;
+struct semaphore rSem;
+struct semaphore wSem;
+
+static DECLARE_WAIT_QUEUE_HEAD(wqW);
+//static DECLARE_WAIT_QUEUE_HEAD(wqW);
+
+static char reader = 0, writer = 0;
 
 int arrayLeftShift(int characterRead){
-	int i;
-//	printk(KERN_DEBUG " %d %d",characterRead, occupiedFifoSpace);
-//        for(i = 0; i<fifoSize; i++){ printk("%c",fifoArray[i]);}
 	memmove((void*)fifoArray, (const void*)&fifoArray[characterRead], (occupiedFifoSpace-characterRead)*sizeof(char));
 	memset((void*)fifoArray+(occupiedFifoSpace-characterRead),0,characterRead);
 	occupiedFifoSpace -= characterRead;
-	printk(KERN_DEBUG " TEST4 %d ",occupiedFifoSpace);
-//        for(i = 0; i<fifoSize; i++){ printk("%c",fifoArray[i]);}
-//	printk(KERN_DEBUG "\n");
-	//TODO add error handling
 	return 0;
 }
+/*
+void fifoWait (){
+
+}
+*/
 
 ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos){
 
-        int minor,i=0, copied = 0, cpt = 0;
-        minor = iminor(fp->f_path.dentry->d_inode);
-	printk(KERN_DEBUG " TEST1 ");
-        //TODO
-	for(i = 0; i<fifoSize; i++){ printk("%c",uBuffer[i]);}
-        if (nbc <= occupiedFifoSpace){
-		down_interruptible(&Sem);
+
+        /**/
+//        wait_event_interruptible(wqR, 1);
+
+	if (down_interruptible(&rMutex)){return -ERESTARTSYS;}
+	if (writer != 0){wake_up_interruptible(&wqW);}
+	printk(KERN_DEBUG "WAKE");
+	if (down_interruptible(&rSem)){return -ERESTARTSYS;}
+	if (nbc <= occupiedFifoSpace){
 		printk(KERN_DEBUG " TEST2 ");
                	if (copy_to_user((void * __user)uBuffer, (void *)fifoArray,nbc)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
 		arrayLeftShift(nbc);
-		up(&Sem);
-//		for(i = 0; i<fifoSize; i++){ printk("%c",uBuffer[i]);}
         }
-	else{
-		i = nbc;
-		printk(KERN_DEBUG " TEST3 ");
-		while (i > 0 && cpt < 50){
-//			printk(KERN_DEBUG " TEST6 ");
-			if (i >= occupiedFifoSpace && occupiedFifoSpace != 0){
-				down_interruptible(&Sem);
-				printk(KERN_DEBUG " TEST7 ");
-	                	if (copy_to_user((void * __user)uBuffer+copied, (void *)fifoArray,occupiedFifoSpace)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
-	               		i-=occupiedFifoSpace;
-				copied+=occupiedFifoSpace;
-				arrayLeftShift(occupiedFifoSpace);
-				up(&Sem);
-			}
-			else if (i < occupiedFifoSpace){
-				down_interruptible(&Sem);
-		                printk(KERN_DEBUG " TEST5 ");
-				if (copy_to_user((void * __user)uBuffer+copied, (void *)fifoArray,i)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
-                                copied+=occupiedFifoSpace;
-				arrayLeftShift(i);
-				//break;
-				i = 0;
-				up(&Sem);
-			}
-			//break;
-			cpt++;
-			printk(KERN_DEBUG"CPT %d",cpt);
-			mdelay(1000);
-/*delay(100000);
-delay(100000);
-delay(100000);
-delay(100000);
-*/
-		}
+	else if ( nbc > occupiedFifoSpace && nbc < fifoSize && occupiedFifoSpace != 0){
+		if (copy_to_user((void * __user)uBuffer, (void *)fifoArray,occupiedFifoSpace)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
+		arrayLeftShift(occupiedFifoSpace);
 	}
-	return i;
+	up(&wSem);
+	up(&rMutex);
+	printk("len uBuffer %ld", strlen(uBuffer));
+	return strlen(uBuffer);
 
 }
 
 ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff_t *pos){
 
-        int minor,i;
-        minor = iminor(fp->f_path.dentry->d_inode);
-        //TODO
+	if (down_interruptible(&wMutex)){return -ERESTARTSYS;}
+        wait_event_interruptible(wqW, reader);
 	if ((occupiedFifoSpace + nbc)<= fifoSize){
-		down_interruptible(&Sem);
-		printk(KERN_DEBUG "WRITE1");
+		if (down_interruptible(&wSem)){return -ERESTARTSYS;}
+		printk(KERN_DEBUG "WRITE LOCK");
 		if (copy_from_user((void *)fifoArray+occupiedFifoSpace, (void * __user)uBuffer,nbc)){printk(KERN_DEBUG "ERROR copy_from_user");return -ENOMEM;}
-	//	for (i =0; i<nbc; i++){
-	//		if (copy_from_user((void *)fifoArray,(void * __user)uBuffer,1)){break;}
-	//	}
 		occupiedFifoSpace +=nbc;
-		printk(KERN_DEBUG "WRITE2");
-		up(&Sem);
+		printk(KERN_DEBUG "WRITE UNLOCK");
+		up(&rSem);
+//		wake_up_interruptible(&wqR);
 	}
-//	for(i = 0; i<fifoSize; i++){ printk("%c",fifoArray[i]);}
 	printk(KERN_DEBUG "NBC = %d",(int)nbc);
 	printk(KERN_DEBUG "Recieved '%s', occupiedFifoSpace : %d", fifoArray,occupiedFifoSpace);
-
-	return i;
+	up(&wMutex);
+	return nbc;
 }
 
 
 int fifo_open(struct inode *inode, struct file *fp)
 {
-    return 0;
+	if (down_interruptible(&orMutex)){return -ERESTARTSYS;}
+	/*Only up to 5 interfaces are allowed*/
+	if( iminor(fp->f_path.dentry->d_inode)> 4){return -ENODEV;}
+
+	if( fp->f_mode & FMODE_READ ){
+		reader++;
+		printk(KERN_DEBUG "READER %d",reader); 
+	}
+	else if( fp->f_mode & FMODE_WRITE){
+		writer++;
+		printk(KERN_DEBUG "WRITER %d",writer);
+	}
+	else{
+		up(&orMutex);
+		/*Not a read or write action, exiting*/
+		return -1;
+	}
+	up(&orMutex);
+	return 0;
 }
 
 int fifo_release(struct inode *inode, struct file *fp)
 {
-    return 0;
+	if (down_interruptible(&orMutex)){return -ERESTARTSYS;}
+        if( fp->f_mode & FMODE_READ ){
+                reader--;
+        }
+        else if( fp->f_mode & FMODE_WRITE){
+                writer--;
+        }
+
+	if(reader == 0 && writer == 0){
+		memset((void*)fifoArray,0,fifoSize);
+		occupiedFifoSpace = 0;
+		printk(KERN_DEBUG "FIFO cleared");
+	}
+
+	up(&orMutex);
+	return 0;
 }
 
 // Structure personnalisee des operations sur les fichiers
@@ -142,6 +149,14 @@ struct file_operations fifo_fops = {
 // Fonction d'init du fifo
 int fifo_init(void){
         int result,i;
+
+	 /*Initialisation du mutex et semaphores*/
+        sema_init(&rSem, 0);
+        sema_init(&wSem, 1);
+	sema_init(&orMutex, 1);
+	sema_init(&rMutex, 1);
+	sema_init(&wMutex, 1);
+
         result = register_chrdev(fifo_major, "fifo", &fifo_fops);
         if(result < 0){
                 return result;
@@ -149,14 +164,8 @@ int fifo_init(void){
         if(fifo_major == 0){
                 fifo_major = result;
         }
-//	for(i = 0; i<fifoSize/2; i++){ fifoArray[i] = 'a'+i; fifoArray[(fifoSize/2)+i] = 'A'+i;}
-//	for(i = 0; i<fifoSize; i++){ printk("%c",fifoArray[i]);}
-//	occupiedFifoSpace = fifoSize;
 	memset((void*)fifoArray,0,fifoSize);
 
-	 /*Initialisation du semaphore*/
-        sema_init(&Sem, 1);
-//	init_MUTEX(&Sem);
         return 0;
 }
 

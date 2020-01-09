@@ -57,7 +57,7 @@ void receive(char *P[]){
 		exit(2);
         }
 
-        if (read(f1,buffer,nbc) == -1) {
+        if (read(f1,buffer,nbc) < 0 ) {
                 perror("read");
 		exit(5);
         }
@@ -84,7 +84,7 @@ void send(char *P[]){
                 perror("open 1");
 		exit(2);
         }
-        if (write(f1,buffer,length) == length) {
+        if (write(f1,buffer,length) != length) {
                 perror("write");
 		exit(6);
         }
