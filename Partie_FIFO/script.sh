@@ -26,7 +26,7 @@ done
 #Not neccessary  when testing a new module version as the MAJOR number stays the same and 
 #the interfaces are linked to it and module reinsertion is enough to change their behaviour
 if [[ `ls /dev/ | grep fifo | wc -l` -ne 0 ]]; then
-	rm /dev/fifot*
+	rm /dev/fifo*
 	echo "Cleanning existing lettre interface"
 fi
 #Removes the previously insterted module
