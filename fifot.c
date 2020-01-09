@@ -86,13 +86,18 @@ int arrayLeftShift(int characterRead){
 ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos){
 
 
-        /*Locking READ mutex*/
-	if (down_interruptible(&rMutex)){return -ERESTARTSYS;}
-
+	if(fp->f_flags & O_NONBLOCK){
+	        /*Locking READ mutex*/
+		if (down_trylock(&rMutex)){return -ERESTARTSYS;}
+	}
+	else{
+	        /*Locking READ mutex*/
+		if (down_interruptible(&rMutex)){return -ERESTARTSYS;}
+	}
 	/*Wake up WRITE thread if present before a READ thread*/
 	if (writer != 0){wake_up_interruptible(&wqW);}
 
-	/*Lock READ after this one while the fifo hasn't been read*/
+	/*Lock READ after this one while the fifo hasn't been Written*/
 	if (down_interruptible(&rSem)){return -ERESTARTSYS;}
 
 	/*The 2 cases of READ*/
@@ -123,7 +128,7 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 		return strlen(uBuffer);
 	}
 
-	/*ERROR handeling*/
+	/*ERROR handling*/
 	else{
 
 	/*Releasing WRITE lock*/
@@ -139,19 +144,26 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 
 ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff_t *pos){
 
-	/*Locking WRITE mutex*/
-	if (down_interruptible(&wMutex)){return -ERESTARTSYS;}
-
+	if(fp->f_flags & O_NONBLOCK){
+		/*Tries locking WRITE mutex, exits on failure*/
+		if (down_trylock(&wMutex)){return -ERESTARTSYS;}
+	}
+	else{
+		/*Locking WRITE mutex*/
+		if (down_interruptible(&wMutex)){return -ERESTARTSYS;}
+	}
 	/*Enter WRITE wait queue if no reader is present*/
         wait_event_interruptible(wqW, reader);
 
 	/*WRITE case*/
 	if ((occupiedFifoSpace + nbc)<= fifoSize){
+
+
+		/*Lock WRITE after this one while the fifo hasn't been read*/
 		if (down_interruptible(&wSem)){return -ERESTARTSYS;}
-		printk(KERN_DEBUG "WRITE LOCK");
+
 		if (copy_from_user((void *)fifoArray+occupiedFifoSpace, (void * __user)uBuffer,nbc)){printk(KERN_DEBUG "ERROR copy_from_user");return -ENOMEM;}
 		occupiedFifoSpace +=nbc;
-		printk(KERN_DEBUG "WRITE UNLOCK");
 
 		/*Release READ lock*/
 		up(&rSem);
@@ -164,7 +176,7 @@ ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff
 		return nbc;
 	}
 
-	/*ERROR Handeling*/
+	/*ERROR Handling*/
 	else{
 		/*Release WRITE mutex*/
 		up(&wMutex);
@@ -176,10 +188,13 @@ ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff
 
 int fifo_open(struct inode *inode, struct file *fp)
 {
+	/*Locking OPEN/RELEASE mutex*/
 	if (down_interruptible(&orMutex)){return -ERESTARTSYS;}
-	/*Only up to 5 interfaces are allowed*/
+
+	/*Only allow up to 5 interfaces*/
 	if( iminor(fp->f_path.dentry->d_inode)> 4){return -ENODEV;}
 
+	/*Checks how the FIFO was opened and updates reader or writer accordingly*/
 	if( fp->f_mode & FMODE_READ ){
 		reader++;
 		printk(KERN_DEBUG "READER %d",reader); 
@@ -188,18 +203,29 @@ int fifo_open(struct inode *inode, struct file *fp)
 		writer++;
 		printk(KERN_DEBUG "WRITER %d",writer);
 	}
+
+	/*Handles unauthorized open type O_RDWR*/
 	else{
+
+		/*Release OPEN/RELEASE mutex*/
 		up(&orMutex);
+
 		/*Not a read or write action, exiting*/
 		return -1;
 	}
+
+	/*Release OPEN/RELEASE mutex*/
 	up(&orMutex);
 	return 0;
 }
 
 int fifo_release(struct inode *inode, struct file *fp)
 {
+
+	/*Locking OPEN/RELEASE mutex*/
 	if (down_interruptible(&orMutex)){return -ERESTARTSYS;}
+
+	/*Remove reader/writer before deallocating the file pointer*/
         if( fp->f_mode & FMODE_READ ){
                 reader--;
         }
@@ -207,12 +233,14 @@ int fifo_release(struct inode *inode, struct file *fp)
                 writer--;
         }
 
+	/*If none the the FIFO exits are opened, clears the FIFO */
 	if(reader == 0 && writer == 0){
 		memset((void*)fifoArray,0,fifoSize);
 		occupiedFifoSpace = 0;
 		printk(KERN_DEBUG "FIFO cleared");
 	}
 
+	/*Release OPEN/RELEASE mutex*/
 	up(&orMutex);
 	return 0;
 }
@@ -229,33 +257,34 @@ struct file_operations fifo_fops = {
 
 // Fonction d'init du fifo
 int fifo_init(void){
-        int result,i;
+        int result;
 
-	 /*Initialisation du mutex et semaphores*/
+	 /*Initialisation des mutexs et semaphores*/
         sema_init(&rSem, 0);
         sema_init(&wSem, 1);
 	sema_init(&orMutex, 1);
 	sema_init(&rMutex, 1);
 	sema_init(&wMutex, 1);
 
+	/*Registering the character device*/
         result = register_chrdev(fifo_major, "fifo", &fifo_fops);
         if(result < 0){
                 return result;
         }
+	/*Forcing KERNEL to attribute the MAJOR number*/
         if(fifo_major == 0){
                 fifo_major = result;
         }
+	/*Clearing allocated FIFO space*/
 	memset((void*)fifoArray,0,fifoSize);
 
-	free_irq(1,NULL);
-        return request_irq (1, (irq_handler_t) irq_handler,IRQF_SHARED, "test_keyboard_irq_handler",(void *)(irq_handler));
-
-//        return 0;
+	return 0;
 }
 
 // Fonction d'exit du fifo
 void fifo_exit(void){
-	free_irq(1, (void*)irq_handler);
+
+	/*Unregistering the character device*/
         unregister_chrdev(fifo_major, "fifo");
 }
 
