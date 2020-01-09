@@ -10,15 +10,10 @@
 #include <linux/string.h>
 #include <linux/semaphore.h> 
 #include <linux/kernel.h>
-#include <linux/ftrace.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/unistd.h>
 #include <linux/wait.h>
-
-#include <linux/interrupt.h>
-#include <asm/io.h>
-
 
 MODULE_AUTHOR("ESME_3S3");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -40,39 +35,6 @@ static DECLARE_WAIT_QUEUE_HEAD(wqW);
 
 /*Variables counting the number of threads of each type*/ 
 static char reader = 0, writer = 0;
-
-
-irqreturn_t irq_handler(int irq, void *dev_id, struct pt_regs *regs)
-{
-/*
-* This variables are static because they need to be
-* accessible (through pointers) to the bottom half routine.
-*/
-
-  static unsigned char scancode;
-  unsigned char status;
-
-/*
-* Read keyboard status
-*/
-  status = inb(0x64);
-  scancode = inb(0x60);
-
-switch (scancode)
-{
-  case 0x01:  printk (KERN_INFO "! You pressed Esc ...\n");
-              break;
-  case 0x3B:  printk (KERN_INFO "! You pressed F1 ...\n");
-              break;
-  case 0x3C:  printk (KERN_INFO "! You pressed F2 ...\n");
-              break;
-  default:
-              break;
-}
-
-  return IRQ_HANDLED;
-}
-
 
 
 /*Function used to shift to the left the elements of the array after READ*/
