@@ -8,8 +8,9 @@ else
 
 default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+	cc -o client client.c
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
-
+	rm client
 endif
