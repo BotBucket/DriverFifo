@@ -85,11 +85,16 @@ int arrayLeftShift(int characterRead){
 
 ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos){
 
-
+	/*NONBLOCKING operations*/
 	if(fp->f_flags & O_NONBLOCK){
-	        /*Locking READ mutex*/
+
+		/*If no writer or data to read are present exits*/
+		if ((writer == 0) | (occupiedFifoSpace == 0)){return -EAGAIN;}
+
+	        /*Tries to Lock READ mutex, exits on failure*/
 		if (down_trylock(&rMutex)){return -ERESTARTSYS;}
 	}
+
 	else{
 	        /*Locking READ mutex*/
 		if (down_interruptible(&rMutex)){return -ERESTARTSYS;}
@@ -145,6 +150,10 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff_t *pos){
 
 	if(fp->f_flags & O_NONBLOCK){
+
+		/*If no reader are present exits*/
+		if ( reader == 0){return -EAGAIN;}
+
 		/*Tries locking WRITE mutex, exits on failure*/
 		if (down_trylock(&wMutex)){return -ERESTARTSYS;}
 	}

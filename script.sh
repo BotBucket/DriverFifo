@@ -5,7 +5,7 @@ if [[ $EUID -ne 0 ]]; then
 	exit 1
 fi
 #Default values
-maxInterfaces=25
+maxInterfaces=5
 clean=0
 isANumber='^[0-9]+$'
 
@@ -25,22 +25,22 @@ done
 #Cleans the interfaces.
 #Not neccessary  when testing a new module version as the MAJOR number stays the same and 
 #the interfaces are linked to it and module reinsertion is enough to change their behaviour
-if [[ `ls /dev/ | grep lettre | wc -l` -ne 0 ]]; then
-	rm /dev/lettre*
+if [[ `ls /dev/ | grep fifo | wc -l` -ne 0 ]]; then
+	rm /dev/fifot*
 	echo "Cleanning existing lettre interface"
 fi
 #Removes the previously insterted module
-if [[ `lsmod | head | grep mod5 | wc -l` -ne 0 ]]; then
-	rmmod mod5
+if [[ `lsmod | head | grep fifot | wc -l` -ne 0 ]]; then
+	rmmod fifot
 	echo "Removing module"
 fi
 if [[ $clean -ne 1 ]]; then
 	#checks if the module to insert exist
-	if [[ `ls | grep mod5.ko | wc -l` -ne 0 ]]; then
+	if [[ `ls | grep fifot.ko | wc -l` -ne 0 ]]; then
 	#Cheks devices before insertion
 	cat /proc/devices > out1
 	#Inserts newly compiled module
-	insmod mod5.ko
+	insmod fifot.ko
 	#Checks devices after insertion
 	cat /proc/devices > out2
 
