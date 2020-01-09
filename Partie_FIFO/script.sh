@@ -4,6 +4,9 @@ if [[ $EUID -ne 0 ]]; then
 	echo "Must Be run as ROOT"
 	exit 1
 fi
+
+make
+
 #Default values
 maxInterfaces=5
 clean=0
@@ -28,6 +31,7 @@ done
 if [[ `ls /dev/ | grep fifo | wc -l` -ne 0 ]]; then
 	rm /dev/fifo*
 	echo "Cleanning existing lettre interface"
+	make clean
 fi
 #Removes the previously insterted module
 if [[ `lsmod | head | grep fifot | wc -l` -ne 0 ]]; then

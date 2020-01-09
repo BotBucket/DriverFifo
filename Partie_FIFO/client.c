@@ -43,7 +43,6 @@ int main(int N, char *P[])
 
 		step_2:
 		scanf("%c",&options);
-//		options = getchar();
 		printf("DEBUG OPTIONS = %c\n", options);
 		switch(options){
 			case '1':
@@ -83,12 +82,12 @@ void receive_NB(char *P[]){
 	int f1;
 	if ((f1 = open(P[1],O_RDONLY|O_NONBLOCK)) < 0) {
                 perror("open 1");
-		exit(2);
+//		exit(2);
         }
 
         if (read(f1,buffer,nbc) < 0 ) {
                 perror("read");
-		exit(5);
+//		exit(5);
         }
         printf("FIFO say : \"%s\"\n\n", buffer);
 	printf("\n********** ********** ********** ********** **********\n\n");
@@ -116,11 +115,11 @@ void send_NB(char *P[]){
 	int f1;
         if ((f1 = open(P[1],O_WRONLY|O_NONBLOCK)) < 0) {
                 perror("open 1");
-		exit(2);
+//		exit(2);
         }
         if (write(f1,buffer,length) != length) {
                 perror("write");
-		exit(6);
+//		exit(6);
         }
 	printf("\n********** ********** ********** ********** **********\n\n");
         close(f1);
@@ -141,12 +140,12 @@ void receive_B(char *P[]){
 	int f1;
 	if ((f1 = open(P[1],O_RDONLY)) < 0) {
                 perror("open 1");
-		exit(2);
+//		exit(2);
         }
 
         if (read(f1,buffer,nbc) < 0 ) {
                 perror("read");
-		exit(5);
+//		exit(5);
         }
         printf("FIFO say : \"%s\"\n\n", buffer);
 	printf("\n********** ********** ********** ********** **********\n\n");
@@ -174,11 +173,11 @@ void send_B(char *P[]){
 	int f1;
         if ((f1 = open(P[1],O_WRONLY)) < 0) {
                 perror("open 1");
-		exit(2);
+//		exit(2);
         }
         if (write(f1,buffer,length) != length) {
                 perror("write");
-		exit(6);
+//		exit(6);
         }
 	printf("\n********** ********** ********** ********** **********\n\n");
         close(f1);
