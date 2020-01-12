@@ -18,7 +18,6 @@ int main(int N, char *P[])
 	int f1, f2, i;
 	char flag = 0;
 	char c[22],*p, options;
-	char r[10] = "Hello_dear";
 	memset(c, 0, sizeof(c));
         if (N != 2 ) {
                 fprintf(stderr,"Utilisation : %s fichier_ou_device !\n",P[0]);
@@ -43,7 +42,7 @@ int main(int N, char *P[])
 
 		step_2:
 		scanf("%c",&options);
-		printf("DEBUG OPTIONS = %c\n", options);
+//		printf("DEBUG OPTIONS = %c\n", options);
 		switch(options){
 			case '1':
 				receive_NB(P);

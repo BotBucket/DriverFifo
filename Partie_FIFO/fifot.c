@@ -27,8 +27,8 @@ static int occupiedFifoSpace = 0;
 struct semaphore orMutex;
 struct semaphore rMutex;
 struct semaphore wMutex;
-struct semaphore rSem;
-struct semaphore wSem;
+struct semaphore isEmpty;
+struct semaphore isFull;
 
 /*Wait queue for WRITE happening without a READ*/ 
 static DECLARE_WAIT_QUEUE_HEAD(wqW);
@@ -65,7 +65,14 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 	if (writer != 0){wake_up_interruptible(&wqW);}
 
 	/*Lock READ after this one while the fifo hasn't been Written*/
-	if (down_interruptible(&rSem)){return -ERESTARTSYS;}
+//      	if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
+	if (strlen(fifoArray) == 0){
+		printk("FIFO was empty, READ exited");
+		return 0;
+	}
+
+	/*Lock READ after this one while the fifo hasn't been Written*/
+	if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
 
 	/*The 2 cases of READ*/
 	if (nbc <= occupiedFifoSpace){
@@ -73,8 +80,15 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 		/*Shifting left READ data*/
 		arrayLeftShift(nbc);
 
+
+        	/*Lock READ after this one while the fifo hasn't been Written*/
+//      	if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
+		if (strlen(fifoArray) != 0){
+			if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
+			return 0;
+		}
 		/*Releasing WRITE lock*/
-		up(&wSem);
+		up(&isFull);
 
 		/*Releasing READ mutex*/
 		up(&rMutex);
@@ -87,7 +101,7 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 		arrayLeftShift(occupiedFifoSpace);
 
 		/*Releasing WRITE lock*/
-		up(&wSem);
+//		up(&isFull);
 
 		/*Releasing READ mutex*/
 		up(&rMutex);
@@ -99,7 +113,7 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 	else{
 
 	/*Releasing WRITE lock*/
-	up(&wSem);
+//	up(&isFull);
 
 	/*Releasing READ mutex*/
         up(&rMutex);
@@ -131,13 +145,13 @@ ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff
 
 
 		/*Lock WRITE after this one while the fifo hasn't been read*/
-		if (down_interruptible(&wSem)){return -ERESTARTSYS;}
+//		if (down_interruptible(&isFull)){return -ERESTARTSYS;}
 
 		if (copy_from_user((void *)fifoArray+occupiedFifoSpace, (void * __user)uBuffer,nbc)){printk(KERN_DEBUG "ERROR copy_from_user");return -ENOMEM;}
 		occupiedFifoSpace +=nbc;
 
 		/*Release READ lock*/
-		up(&rSem);
+//		up(&isEmpty);
 
 		printk(KERN_DEBUG "NBC = %d",(int)nbc);
 		printk(KERN_DEBUG "Recieved '%s', occupiedFifoSpace : %d", fifoArray,occupiedFifoSpace);
@@ -231,8 +245,8 @@ int fifo_init(void){
         int result;
 
 	 /*Initialisation des mutexs et semaphores*/
-        sema_init(&rSem, 0);
-        sema_init(&wSem, 1);
+        sema_init(&isEmpty, 0);
+        sema_init(&isFull, 1);
 	sema_init(&orMutex, 1);
 	sema_init(&rMutex, 1);
 	sema_init(&wMutex, 1);
