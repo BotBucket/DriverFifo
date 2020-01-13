@@ -8,7 +8,7 @@ else
 
 default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
-	cc -o testing_program client.c
+#	cc -o testing_program client.c
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean

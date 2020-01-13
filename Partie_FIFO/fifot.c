@@ -23,21 +23,26 @@ MODULE_LICENSE("Dual BSD/GPL");
 
 static int fifo_major = 0; // MAJOR Number
 static char fifoArray[fifoSize];
+char * readPtr = fifoArray;
+char * writePtr = fifoArray;
+static int readPos = 0, writePos = 0;
+
+
 static int occupiedFifoSpace = 0;
 struct semaphore orMutex;
 struct semaphore rMutex;
 struct semaphore wMutex;
-struct semaphore isEmpty;
-struct semaphore isFull;
 
 /*Wait queue for WRITE happening without a READ*/ 
 static DECLARE_WAIT_QUEUE_HEAD(wqW);
+/*Wait queue for READ happening without a WRITE*/ 
+static DECLARE_WAIT_QUEUE_HEAD(rqW);
 
 /*Variables counting the number of threads of each type*/ 
 static char reader = 0, writer = 0;
 
-
-/*Function used to shift to the left the elements of the array after READ*/
+/*
+//Function used to shift to the left the elements of the array after READ
 int arrayLeftShift(int characterRead){
 	memmove((void*)fifoArray, (const void*)&fifoArray[characterRead], (occupiedFifoSpace-characterRead)*sizeof(char));
 	memset((void*)fifoArray+(occupiedFifoSpace-characterRead),0,characterRead);
@@ -45,8 +50,24 @@ int arrayLeftShift(int characterRead){
 	return 0;
 }
 
+//Functions to circularly READ/WRITE the array
+void arrayReadWrite(char __user *kBuffer, char nRW){
+char i;
+static char readPos = 0, writePos = 0;
+	if (nRW == 0){
+		readPos = (readPos + fifoSize -1) % fifoSize;
+		*kBuffer+i = *readPtr+readPos;
+		occupiedFifoSpace--;
+	}
+	else if ( nRW == 1){
+		writePos = (writePos + 1)%fifoSize;
+		*writePtr+writePos = *kBuffer+i;
+		occupiedFifoSpace++;
+	}
+}
+*/
 ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos){
-
+char i;
 	/*NONBLOCKING operations*/
 	if(fp->f_flags & O_NONBLOCK){
 
@@ -61,34 +82,45 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 	        /*Locking READ mutex*/
 		if (down_interruptible(&rMutex)){return -ERESTARTSYS;}
 	}
-	/*Wake up WRITE thread if present before a READ thread*/
-	if (writer != 0){wake_up_interruptible(&wqW);}
+	/*Enter READ wait queue if no writer is present*/
+	wait_event_interruptible(rqW, writer);
 
+	/*Wake up WRITE thread if present before a READ thread*/
+//	if (writer != 0){wake_up_interruptible(&wqW);}
+//Modif
 	/*Lock READ after this one while the fifo hasn't been Written*/
-//      	if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
+//	if (down_interruptible(&rSem)){return -ERESTARTSYS;}
 	if (strlen(fifoArray) == 0){
+		up(&rMutex);
 		printk("FIFO was empty, READ exited");
-		return 0;
+		return -1;
 	}
 
 	/*Lock READ after this one while the fifo hasn't been Written*/
-	if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
+//	if (down_interruptible(&rSem)){return -ERESTARTSYS;}
+//Modif
 
 	/*The 2 cases of READ*/
 	if (nbc <= occupiedFifoSpace){
-               	if (copy_to_user((void * __user)uBuffer, (void *)fifoArray,nbc)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
-		/*Shifting left READ data*/
-		arrayLeftShift(nbc);
+		for(i = 0; i < nbc; i++){
+	               	if (copy_to_user((void * __user)uBuffer+i, (void *)fifoArray+readPos,1)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
+			/*Shifting left READ data*/
+	//		arrayLeftShift(nbc);
+			fifoArray[readPos] = 0;
+			readPos = (readPos + fifoSize -1) % fifoSize;
+			occupiedFifoSpace--;
+		}
+		printk("READ '%s' , FIFO '%s'", uBuffer, fifoArray);
 
 
         	/*Lock READ after this one while the fifo hasn't been Written*/
-//      	if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
-		if (strlen(fifoArray) != 0){
-			if (down_interruptible(&isEmpty)){return -ERESTARTSYS;}
-			return 0;
-		}
+//      	if (down_interruptible(&rSem)){return -ERESTARTSYS;}
+//		if (strlen(fifoArray) != 0){
+//			if (down_interruptible(&rSem)){return -ERESTARTSYS;}
+//			return -1;
+//		}
 		/*Releasing WRITE lock*/
-		up(&isFull);
+//		up(&wSem);
 
 		/*Releasing READ mutex*/
 		up(&rMutex);
@@ -96,12 +128,20 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 		return strlen(uBuffer);
         }
 	else if ( nbc > occupiedFifoSpace && nbc < fifoSize && occupiedFifoSpace != 0){
-		if (copy_to_user((void * __user)uBuffer, (void *)fifoArray,occupiedFifoSpace)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
-		/*Shifting left READ data*/
-		arrayLeftShift(occupiedFifoSpace);
+
+		for(i = 0; i < occupiedFifoSpace; i++){
+	               	if (copy_to_user((void * __user)uBuffer+i, (void *)fifoArray+readPos,1)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
+			/*Shifting left READ data*/
+	//		arrayLeftShift(nbc);
+			fifoArray[readPos] = 0;
+			readPos = (readPos + fifoSize -1) % fifoSize;
+			occupiedFifoSpace--;
+		}
+
+		printk("READ '%s' , FIFO '%s'", uBuffer, fifoArray);
 
 		/*Releasing WRITE lock*/
-//		up(&isFull);
+//		up(&wSem);
 
 		/*Releasing READ mutex*/
 		up(&rMutex);
@@ -113,7 +153,7 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 	else{
 
 	/*Releasing WRITE lock*/
-//	up(&isFull);
+//	up(&wSem);
 
 	/*Releasing READ mutex*/
         up(&rMutex);
@@ -124,7 +164,7 @@ ssize_t fifo_read(struct file *fp, char __user *uBuffer, size_t nbc, loff_t *pos
 }
 
 ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff_t *pos){
-
+char i;
 	if(fp->f_flags & O_NONBLOCK){
 
 		/*If no reader are present exits*/
@@ -138,20 +178,21 @@ ssize_t fifo_write(struct file *fp, const char __user *uBuffer, size_t nbc, loff
 		if (down_interruptible(&wMutex)){return -ERESTARTSYS;}
 	}
 	/*Enter WRITE wait queue if no reader is present*/
-        wait_event_interruptible(wqW, reader);
+	wait_event_interruptible(wqW, reader);
 
 	/*WRITE case*/
 	if ((occupiedFifoSpace + nbc)<= fifoSize){
 
 
 		/*Lock WRITE after this one while the fifo hasn't been read*/
-//		if (down_interruptible(&isFull)){return -ERESTARTSYS;}
-
-		if (copy_from_user((void *)fifoArray+occupiedFifoSpace, (void * __user)uBuffer,nbc)){printk(KERN_DEBUG "ERROR copy_from_user");return -ENOMEM;}
-		occupiedFifoSpace +=nbc;
-
+//		if (down_interruptible(&wSem)){return -ERESTARTSYS;}
+		for (i = 0; i < nbc;i++){
+			if (copy_from_user((void *)fifoArray+writePos, (void * __user)uBuffer+i,1)){printk(KERN_DEBUG "ERROR copy_from_user");return -ENOMEM;}
+			writePos = (writePos + 1)%fifoSize;
+			occupiedFifoSpace++;
+		}
 		/*Release READ lock*/
-//		up(&isEmpty);
+//		up(&rSem);
 
 		printk(KERN_DEBUG "NBC = %d",(int)nbc);
 		printk(KERN_DEBUG "Recieved '%s', occupiedFifoSpace : %d", fifoArray,occupiedFifoSpace);
@@ -182,10 +223,14 @@ int fifo_open(struct inode *inode, struct file *fp)
 	/*Checks how the FIFO was opened and updates reader or writer accordingly*/
 	if( fp->f_mode & FMODE_READ ){
 		reader++;
+		/*Wake up WRITE threads if present before a READ thread*/
+		if (writer != 0 && reader == 1){wake_up_interruptible(&wqW);}
 		printk(KERN_DEBUG "READER %d",reader); 
 	}
 	else if( fp->f_mode & FMODE_WRITE){
 		writer++;
+		/*Wake up READ threads if present before a WRITE thread*/
+		if (reader != 0 && writer == 1){wake_up_interruptible(&rqW);}
 		printk(KERN_DEBUG "WRITER %d",writer);
 	}
 
@@ -244,9 +289,7 @@ struct file_operations fifo_fops = {
 int fifo_init(void){
         int result;
 
-	 /*Initialisation des mutexs et semaphores*/
-        sema_init(&isEmpty, 0);
-        sema_init(&isFull, 1);
+	 /*Initialisation des mutexs*/
 	sema_init(&orMutex, 1);
 	sema_init(&rMutex, 1);
 	sema_init(&wMutex, 1);
