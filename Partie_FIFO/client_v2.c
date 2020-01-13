@@ -94,6 +94,7 @@ void receive_NB(char *P[]){
                 }
 		else{
                 	printf("FIFO say : \"%s\"\n\n", buffer);
+			memset(buffer, 0 , sizeof(buffer));
 		}
                 printf("\n********** ********** ********** ********** **********\n\n");
                 printf("Read again ? 1 : Yes \tAnything else : No :\n");
@@ -170,6 +171,8 @@ void receive_B(char *P[]){
                 }
 		else{
                 	printf("FIFO say : \"%s\"\n\n", buffer);
+			memset(buffer, 0 , sizeof(buffer));
+
 		}
                 printf("\n********** ********** ********** ********** **********\n\n");
                 printf("Read again ? 1 : Yes \tAnything else : No :\n");
