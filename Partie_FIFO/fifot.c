@@ -106,8 +106,13 @@ char i;
 	               	if (copy_to_user((void * __user)uBuffer+i, (void *)fifoArray+readPos,1)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
 			/*Shifting left READ data*/
 	//		arrayLeftShift(nbc);
-			fifoArray[readPos] = 0;
-			readPos = (readPos + fifoSize -1) % fifoSize;
+	//		printk ("uBuffer %s , readPos %d , fifoArray[readPos] %c, fifoArray %s",uBuffer,readPos,fifoArray[readPos], fifoArray );
+//			fifoArray[readPos] = 0;
+			memset((void*)fifoArray+readPos,0,1);
+
+			readPos = (readPos + 1)%fifoSize;
+//			readPos = (readPos + fifoSize -1) % fifoSize;
+			printk ("uBuffer %s , readPos %d , fifoArray[readPos] %c, fifoArray %s",uBuffer,readPos,fifoArray[readPos], fifoArray );
 			occupiedFifoSpace--;
 		}
 		printk("READ '%s' , FIFO '%s'", uBuffer, fifoArray);
@@ -133,8 +138,10 @@ char i;
 	               	if (copy_to_user((void * __user)uBuffer+i, (void *)fifoArray+readPos,1)){printk(KERN_DEBUG "ERROR copy_to_user");return -ENOMEM;}
 			/*Shifting left READ data*/
 	//		arrayLeftShift(nbc);
-			fifoArray[readPos] = 0;
-			readPos = (readPos + fifoSize -1) % fifoSize;
+//			fifoArray[readPos] = 0;
+			memset((void*)fifoArray+readPos,0,1);
+			readPos = (readPos + 1)%fifoSize;
+//			readPos = (readPos + fifoSize -1) % fifoSize;
 			occupiedFifoSpace--;
 		}
 
